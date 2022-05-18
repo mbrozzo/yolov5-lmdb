@@ -114,25 +114,20 @@ def create_dataloader(path,
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
     with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
-        if lmdb:
-            dataset = LmdbLoader(
-                path,
-                imgsz,
-                batch_size)
-        else:
-            dataset = LoadImagesAndLabels(
-                path,
-                imgsz,
-                batch_size,
-                augment=augment,  # augmentation
-                hyp=hyp,  # hyperparameters
-                rect=rect,  # rectangular batches
-                cache_images=cache,
-                single_cls=single_cls,
-                stride=int(stride),
-                pad=pad,
-                image_weights=image_weights,
-                prefix=prefix)
+        dataset_loader = LmdbLoader if lmdb else LoadImagesAndLabels
+        dataset = dataset_loader(
+            path,
+            imgsz,
+            batch_size,
+            augment=augment,  # augmentation
+            hyp=hyp,  # hyperparameters
+            rect=rect,  # rectangular batches
+            cache_images=cache,
+            single_cls=single_cls,
+            stride=int(stride),
+            pad=pad,
+            image_weights=image_weights,
+            prefix=prefix)
 
     batch_size = min(batch_size, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
@@ -872,11 +867,12 @@ class LmdbLoader(LoadImagesAndLabels):
                  prefix=''):
 
 
-        if cache_images == 'disk':
-            raise ValueError('Disk caching is not compatible with LMDB datasets')
+        # if cache_images == 'disk':
+        #     raise ValueError('Disk caching is not compatible with LMDB datasets')
+        path = Path(path)
+        if not path.is_dir():
+            raise ValueError('Argument path must be a directory when using an LMDB dataset')
         self.path = path
-        with LmdbDataset(path) as lmdb:
-            self.keys = list(lmdb.keys())
         
 
         self.img_size = img_size
@@ -890,30 +886,35 @@ class LmdbLoader(LoadImagesAndLabels):
         self.path = path
         self.albumentations = Albumentations() if augment else None
 
-        try:
-            f = []  # image files
-            for p in path if isinstance(path, list) else [path]:
-                p = Path(p)  # os-agnostic
-                if p.is_dir():  # dir
-                    f += glob.glob(str(p / '**' / '*.*'), recursive=True)
-                    # f = list(p.rglob('*.*'))  # pathlibs
-                elif p.is_file():  # file
-                    with open(p) as t:
-                        t = t.read().strip().splitlines()
-                        parent = str(p.parent) + os.sep
-                        f += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
-                        # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
-                else:
-                    raise Exception(f'{prefix}{p} does not exist')
-            self.im_files = sorted(x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in IMG_FORMATS)
-            # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
-            assert self.im_files, f'{prefix}No images found'
-        except Exception as e:
-            raise Exception(f'{prefix}Error loading data from {path}: {e}\nSee {HELP_URL}')
+
+        with LmdbDataset(path) as lmdb:
+            self.keys = list(lmdb.keys())
+        
+
+        # try:
+        #     f = []  # image files
+        #     for p in path if isinstance(path, list) else [path]:
+        #         p = Path(p)  # os-agnostic
+        #         if p.is_dir():  # dir
+        #             f += glob.glob(str(p / '**' / '*.*'), recursive=True)
+        #             # f = list(p.rglob('*.*'))  # pathlibs
+        #         elif p.is_file():  # file
+        #             with open(p) as t:
+        #                 t = t.read().strip().splitlines()
+        #                 parent = str(p.parent) + os.sep
+        #                 f += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
+        #                 # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
+        #         else:
+        #             raise Exception(f'{prefix}{p} does not exist')
+        #     self.im_files = sorted(x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in IMG_FORMATS)
+        #     # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
+        #     assert self.im_files, f'{prefix}No images found'
+        # except Exception as e:
+        #     raise Exception(f'{prefix}Error loading data from {path}: {e}\nSee {HELP_URL}')
 
         # Check cache
-        self.label_files = img2label_paths(self.im_files)  # labels
-        cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix('.cache')
+        # self.label_files = img2label_paths(self.im_files)  # labels
+        cache_path = path.joinpath('lables.cache')
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
             assert cache['version'] == self.cache_version  # same version
@@ -1118,15 +1119,17 @@ class LmdbLoader(LoadImagesAndLabels):
     # Loads images from LMDB instead of disk
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
-        im, key = self.ims[i], self.keys[i]
+        im, key, fn = self.ims[i], self.keys[i], self.npy_files[i]
         if im is None:  # not cached in RAM
 
             # --- START OF MODIFIED CODE ---
-            # read image
-            with LmdbDataset(self.path) as lmdb:
-                im, json = lmdb.readImageJsonPair(key)
-            # cache image labels in memory
-            self.labels[key] = self.json2label(json)
+            if fn.exists():  # load npy
+                im = np.load(fn)
+            else:  # read image
+                with LmdbDataset(self.path) as lmdb:
+                    im, json = lmdb.readImageJsonPair(key)
+                # cache image labels in memory
+                self.labels[key] = self.json2label(json)
             # --- END OF MODIFIED CODE ---
 
             h0, w0 = im.shape[:2]  # orig hw
