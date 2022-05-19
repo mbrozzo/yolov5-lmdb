@@ -28,8 +28,12 @@ parser.add_argument('yaml_path', help="the path to the dataset's YAML file")
 parser.add_argument('lmdb_path', help="the path where the lmdb dataset will be created (must be empty)")
 parser.add_argument('--source', default='', help="a string describing the dataset's source")
 parser.add_argument('--ignore-empty', action='store_true')
+parser.add_argument('--overwrite', action='store_true')
 
 args = parser.parse_args()
+
+if args.overwrite:
+    args.ignore_empty = True
 
 lmdb_path = Path(args.lmdb_path)
 if not lmdb_path.exists():
@@ -132,7 +136,14 @@ for set_ in train_val:
             try:
                 dataset.storeDataJsonPair(img_path.name, image_data, { "boxes": boxes, "source": args.source })
             except Exception as e:
-                print(f'Could not add file {img_path.absolute()}: {e}')
+                if args.overwrite:
+                    try:
+                        dataset.delete(img_path.name)
+                        dataset.storeDataJsonPair(img_path.name, image_data, { "boxes": boxes, "source": args.source })
+                    except Exception as e:
+                        print(f'Could not overwrite file {img_path.absolute()}: {e}')
+                else:
+                    print(f'Could not add file {img_path.absolute()}: {e}')
             
     print(f"{set_} set done.")
 
