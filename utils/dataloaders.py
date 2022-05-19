@@ -32,7 +32,6 @@ from utils.torch_utils import torch_distributed_zero_first
 
 import sys
 sys.path.append(str(Path(__file__).parent.parent.joinpath('lmdb')))
-print(str(Path(__file__).parent.joinpath('lmdb')))
 from lmdbDataset import *
 
 # Parameters
@@ -849,6 +848,7 @@ class LoadImagesAndLabels(Dataset):
 
 class LmdbLoader(LoadImagesAndLabels):
     
+    # OK
     def __init__(self,
                  path,
                  img_size=640,
@@ -862,16 +862,6 @@ class LmdbLoader(LoadImagesAndLabels):
                  stride=32,
                  pad=0.0,
                  prefix=''):
-
-
-        # if cache_images == 'disk':
-        #     raise ValueError('Disk caching is not compatible with LMDB datasets')
-        path = Path(path)
-        if not path.is_dir():
-            raise ValueError('Argument path must be a directory when using an LMDB dataset')
-        self.path = path
-        
-
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -883,8 +873,13 @@ class LmdbLoader(LoadImagesAndLabels):
         self.path = path
         self.albumentations = Albumentations() if augment else None
 
+        # if cache_images == 'disk':
+        #     raise ValueError('Disk caching is not compatible with LMDB datasets')
+        path_obj = Path(path)
+        if not path_obj.is_dir():
+            raise ValueError('Argument path must be a directory when using an LMDB dataset')
 
-        with LmdbDataset(path) as lmdb:
+        with LmdbDataset(path, readOnly=True) as lmdb:
             self.im_files = list(lmdb.keys())
         
 
@@ -913,7 +908,7 @@ class LmdbLoader(LoadImagesAndLabels):
         # self.label_files = img2label_paths(self.im_files)  # labels
 
         
-        cache_path = path.joinpath('lables.cache')
+        cache_path = path_obj.joinpath('lables.cache')
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
             assert cache['version'] == self.cache_version  # same version
@@ -935,7 +930,7 @@ class LmdbLoader(LoadImagesAndLabels):
         labels, shapes, self.segments = zip(*cache['labels'].values())
         self.labels = list(labels)
         self.shapes = np.array(shapes, dtype=np.float64)
-        self.im_files = list(cache.keys())  # update
+        self.im_files = list(cache['labels'].keys())  # update
         # self.label_files = img2label_paths(cache.keys())  # update
         n = len(shapes)  # number of images
         bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
@@ -984,7 +979,7 @@ class LmdbLoader(LoadImagesAndLabels):
 
         # Cache images into RAM/disk for faster training (WARNING: large datasets may exceed system resources)
         self.ims = [None] * n
-        self.npy_files = [self.path.joinpath(key, '.npy') for key in self.im_files]
+        self.npy_files = [path_obj.joinpath(key, '.npy') for key in self.im_files]
         if cache_images:
             gb = 0  # Gigabytes of cached images
             self.im_hw0, self.im_hw = [None] * n, [None] * n
@@ -1000,13 +995,13 @@ class LmdbLoader(LoadImagesAndLabels):
                 pbar.desc = f'{prefix}Caching images ({gb / 1E9:.1f}GB {cache_images})'
             pbar.close()
 
-    # OK?
+    # OK
     def cache_labels(self, path=Path('./labels.cache'), prefix=''):
         # Cache dataset labels, check images and read shapes
         x = {
-            labels: {}
+            'labels': {}
         }
-        with LmdbDataset(self.path) as dataset:
+        with LmdbDataset(self.path, readOnly=True) as dataset:
             for im_file in self.im_files:
                 img, json = dataset.readImageJsonPair(im_file)
                 h_img, w_img = img.shape[:2]
@@ -1021,15 +1016,15 @@ class LmdbLoader(LoadImagesAndLabels):
                     x_c = box[0] + w / 2
                     y_c = box[1] + h / 2
                     class_ = box[4] if len(box) == 5 else 0
-                    lb.append([
+                    lb.append(np.array([
                         class_,
                         x_c,
                         y_c,
                         w,
                         h
-                    ])
+                    ], dtype='float32'))
                 segments = []
-                x[labels][im_file] = [lb, shape, segments]
+                x['labels'][im_file] = [np.array(lb, dtype='float32'), shape, segments]
         x['hash'] = get_hash(self.im_files)
         x['results'] = len(self.im_files), 0, 0, 0, len(self.im_files)
         x['msgs'] = []  # warnings
@@ -1122,17 +1117,17 @@ class LmdbLoader(LoadImagesAndLabels):
     #     return torch.from_numpy(img), labels_out, self.im_files[index], shapes
     
 
-    # OK?
+    # NAH
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
         im, key, fn = self.ims[i], self.im_files[i], self.npy_files[i]
         if im is None:  # not cached in RAM
-
-            # --- START OF MODIFIED CODE ---
             if fn.exists():  # load npy
                 im = np.load(fn)
+
+            # --- START OF MODIFIED CODE ---
             else:  # read image
-                with LmdbDataset(self.path) as lmdb:
+                with LmdbDataset(self.path, readOnly=True) as lmdb:
                     im, json = lmdb.readImageJsonPair(key)
             # --- END OF MODIFIED CODE ---
 
@@ -1145,12 +1140,12 @@ class LmdbLoader(LoadImagesAndLabels):
         else:
             return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
 
-    # OK?
+    # ?
     def cache_images_to_disk(self, i):
         # Saves an image as an *.npy file for faster loading
         f = self.npy_files[i]
         if not f.exists():
-            with LmdbDataset(self.path) as dataset:
+            with LmdbDataset(self.path, readOnly=True) as dataset:
                 img, _ = dataset.readImageJsonPair(self.im_files[i])
             np.save(f.as_posix(), img)
 

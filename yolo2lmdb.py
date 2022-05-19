@@ -3,9 +3,11 @@ import os
 import sys
 from pathlib import Path
 import yaml
+from tqdm import tqdm
+
 from utils.dataloaders import IMG_FORMATS
+
 sys.path.append(str(Path(__file__).parent.joinpath('lmdb')))
-print(str(Path(__file__).parent.joinpath('lmdb')))
 from lmdbDataset import *
 
 def replace_last_occurrences(s, old, new, count=1):
@@ -65,11 +67,15 @@ if yaml_dict.get('lmdb', False):
     print('YAML files already has the "lmdb" field set to true, the dataset may already be in LMDB format, exiting.')
     exit(-1)
 
-req_fields = ['train', 'val', 'nc']
+req_fields = ['nc']
 for field in req_fields:
     if field not in yaml_dict:
         print(f'ERROR: YAML file does not contain required field "{field}", exiting.')
         exit(-1)
+sets = []
+for set_ in ['train', 'val', 'test']:
+    if set_ in yaml_dict:
+        sets.append(set_)
 
 try:
     nc = int(yaml_dict['nc'])
@@ -77,9 +83,8 @@ except:
     print('The "nc" field must be an integer')
     exit(-1)
 
-train_val = ['train', 'val']
 imgs_paths = {}
-for set_ in train_val:
+for set_ in sets:
     try:
         p = Path(yaml_dict[set_])
         if not p.is_absolute():
@@ -92,12 +97,11 @@ for set_ in train_val:
         print(f'ERROR: the {set_} images path is not a directory, exiting.')
         exit(-1)
 
-for set_ in train_val:
+for set_ in sets:
+    img_paths = list(imgs_paths[set_].glob('*'))
+    warnings = []
     with LmdbDataset(str(lmdb_path.joinpath(set_).absolute().as_posix())) as dataset:
-        processed_files = 0
-        for img_path in imgs_paths[set_].glob('*'):
-            print(f'{processed_files} files processed.')
-            processed_files += 1
+        for img_path in tqdm(img_paths, desc=f'{set_} set progress', ):
             if img_path.is_dir():
                 continue
             if not img_path.suffix[1:] in IMG_FORMATS:
@@ -115,9 +119,14 @@ for set_ in train_val:
 
                 # Split string to float
                 cl, xc, yc, w, h = map(float, dt.split(' '))
+                try:
+                    cl = int(cl)
+                except:
+                    print(f'ERROR: could not parse class as integer in file {label_path.name}, exiting.')
+                    exit(-1)
                 
                 if cl >= nc:
-                    print(f'WARNING: found class number {cl} in annotation file {label_path} which exceeds or is equal to the number of classes {nc} specified in the YAML file.')
+                    warnings.append(f'WARNING: found class number {cl} in annotation file {label_path.name} which exceeds or is equal to the number of classes {nc} specified in the YAML file.')
 
                 x = (xc - w / 2)
                 y = (yc - h / 2)
@@ -138,22 +147,26 @@ for set_ in train_val:
             except Exception as e:
                 if args.overwrite:
                     try:
+                        print('TODO: Check if keys.json is correct')
                         dataset.delete(img_path.name)
                         dataset.storeDataJsonPair(img_path.name, image_data, { "boxes": boxes, "source": args.source })
                     except Exception as e:
-                        print(f'Could not overwrite file {img_path.absolute()}: {e}')
+                        warnings.append(f'WARNING: Could not overwrite file {img_path.name} in LMDB ({e}), skipping.')
                 else:
-                    print(f'Could not add file {img_path.absolute()}: {e}')
+                    warnings.append(f'WARNING: File {img_path.name} already in LMDB ({e}), skipping.')
             
-    print(f"{set_} set done.")
+    print(f"{set_} set done with {len(warnings)} warnings.")
+    for w in warnings:
+        print(w)
 
 # Generate lmdb yaml
 lmdb_yaml_dict = {
     'lmdb': True,
     'nc': nc,
-    'train': './train/images',
-    'val': './val/images',
 }
+
+for set_ in sets:
+    lmdb_yaml_dict[set_] = f'./{set_}'
 
 names = yaml_dict.get('names')
 if names:
