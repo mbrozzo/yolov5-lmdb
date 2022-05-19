@@ -2,9 +2,6 @@
 """
 Dataloaders and dataset utils
 """
-
-import lmdb.lmdbDataset
-
 import glob
 import hashlib
 import json
@@ -32,6 +29,11 @@ from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterb
 from utils.general import (DATASETS_DIR, LOGGER, NUM_THREADS, check_dataset, check_requirements, check_yaml, clean_str,
                            cv2, segments2boxes, xyn2xy, xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
+
+import sys
+sys.path.append(str(Path(__file__).parent.parent.joinpath('lmdb')))
+print(str(Path(__file__).parent.joinpath('lmdb')))
+from lmdbDataset import *
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
