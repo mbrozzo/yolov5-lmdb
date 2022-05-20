@@ -32,7 +32,7 @@ from utils.torch_utils import torch_distributed_zero_first
 
 import sys
 sys.path.append(str(Path(__file__).parent.parent.joinpath('lmdb')))
-from lmdbDatasetReadonly import LmdbDatasetReadonly
+from lmdbDatasetReadonly import LmdbDatasetReadonly, LmdbMultipleDatasetsReadonly
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -115,6 +115,13 @@ def create_dataloader(path,
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
     with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+        # if lmdb:
+        #     if type(path) == list:
+        #         dataset_loader = MultipleLmdbLoader
+        #     else:
+        #         dataset_loader = LmdbLoader
+        # else:
+        #     dataset_loader = LoadImagesAndLabels
         dataset_loader = LmdbLoader if lmdb else LoadImagesAndLabels
         dataset = dataset_loader(
             path,
@@ -870,20 +877,21 @@ class LmdbLoader(LoadImagesAndLabels):
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.albumentations = Albumentations() if augment else None
-        self.path = path
-        self.lmdb = LmdbDatasetReadonly(path)
+        self.path = path if type(path) == list else [path]
+        self.lmdb = LmdbMultipleDatasetsReadonly(path)
 
-        path_obj = Path(path)
-        if not path_obj.is_dir():
-            raise ValueError('Argument path must be a directory when using an LMDB dataset')
+        path_obj = [Path(p) for p in path]
+        for p in path_obj:
+            if not p.is_dir():
+                raise ValueError('Argument paths must be a directory or a list of directories when using an LMDB dataset')
 
         self.im_files = list(self.lmdb.keys())
         
-        cache_path = path_obj.joinpath('lables.cache')
+        cache_path = path_obj[0].joinpath('labels.cache')
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
             assert cache['version'] == self.cache_version  # same version
-            assert cache['hash'] == get_hash(self.im_files)  # same hash
+            assert cache['hash'] == get_hash([f'{tup[0]}{tup[1]}' for tup in self.im_files])  # same hash
         except Exception:
             cache, exists = self.cache_labels(cache_path, prefix), False  # cache
 
@@ -950,7 +958,7 @@ class LmdbLoader(LoadImagesAndLabels):
 
         # Cache images into RAM/disk for faster training (WARNING: large datasets may exceed system resources)
         self.ims = [None] * n
-        cache_dir = path_obj.joinpath('image_cache')
+        cache_dir = path_obj[0].joinpath('image_cache')
         self.npy_files = [cache_dir.joinpath(f'{key}.npy') for key in self.im_files]
         if cache_images == 'disk':
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -997,7 +1005,7 @@ class LmdbLoader(LoadImagesAndLabels):
                 ], dtype='float32'))
             segments = []
             x['labels'][im_file] = [np.array(lb, dtype='float32'), shape, segments]
-        x['hash'] = get_hash(self.im_files)
+        x['hash'] = get_hash([f'{tup[0]}{tup[1]}' for tup in self.im_files])
         x['results'] = len(self.im_files), 0, 0, 0, len(self.im_files)
         x['msgs'] = []  # warnings
         x['version'] = self.cache_version  # cache version
@@ -1013,7 +1021,10 @@ class LmdbLoader(LoadImagesAndLabels):
     def __len__(self):
         return len(self.im_files)    
 
-    # NAH
+    def __getitem__(self, index):
+        img, label, im_file, shapes = super().__getitem__(index)
+        return img, label, im_file[1], shapes
+    
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
         im, key, fn = self.ims[i], self.im_files[i], self.npy_files[i]
