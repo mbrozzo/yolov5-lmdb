@@ -11,7 +11,7 @@ import numpy as np
 class LmdbSingleFileDataset(object):
     
     # Default map size (100 TB)
-    DefaultMapSize = 100* 1024 * 1024 * 1024 * 1024
+    DefaultMapSize = 100 * 1024 * 1024 * 1024 * 1024
 
     def __init__(self, path, mapSize = None, readOnly = False):
         self.__lock = threading.Lock()
