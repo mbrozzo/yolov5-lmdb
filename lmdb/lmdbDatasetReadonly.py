@@ -34,9 +34,10 @@ class LmdbSingleFileDatasetReadonly:
             self.__keys = [ key.decode('latin1') for key, _ in transaction.cursor() ]
     
     def close(self):
-        self.__lmdb_env.close()
-        self.__lmdb_env = None
-        self.__keys = None
+        if self.is_open():
+            self.__lmdb_env.close()
+            self.__lmdb_env = None
+            self.__keys = None
 
     def is_open(self):
         return self.__lmdb_env is not None
