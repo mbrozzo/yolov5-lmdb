@@ -982,12 +982,12 @@ class LmdbLoader(LoadImagesAndLabels):
             boxes = json.get('boxes', [])
             for box in boxes:
                 if len(box) > 5:
-                    LOGGER.warning(f'{prefix}WARNING: One of the boxes of key "{im_file}" has length {len(box)}, only using first 5 values as x_center, y_center, width, height and class.')
+                    LOGGER.warning(f'{prefix}WARNING: One of the boxes of key "{im_file}" has length {len(box)}, only using first 5 values as x_center, y_center, width, height and class. Image segmentation has not been implemented with LMDB datasets.')
                 w = box[2]
                 h = box[3]
                 x_c = box[0] + w / 2
                 y_c = box[1] + h / 2
-                class_ = box[4] if len(box) == 5 else 0
+                class_ = box[4] if len(box) >= 5 else 0
                 lb.append(np.array([
                     class_,
                     x_c,
