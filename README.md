@@ -41,6 +41,18 @@ Shape values represents image height, width and depth, repsectively.
 Datasets in the YOLOv5 format can be converted to this LMDB format using the yolo2lmdb.py script.  
 
 ## Enabling LMDB dataset support in YOLOv5
-The LMDB support is enabled by setting the ```lmdb``` field to ```true``` in the dataset's yaml.
+The LMDB support is enabled by setting the ```lmdb``` field to ```true``` in the dataset's ```.yaml.```
 The ```train``` and ```val``` fields must point to the folder containing the ```keys.json``` of each datasets.
 Said fields can also be lists of paths.
+
+```
+lmdb: true
+train: 
+ - /usr/src/app/AI-Data/VTE-lmdb/Vte_Lmdb_train
+ - /usr/src/app/AI-Data/VTE-lmdb/Vte_Lmdb_bg
+val: 
+ - /usr/src/app/AI-Data/VTE-lmdb/Vte_Lmdb_test
+nc: 1
+names: ['person']
+```
+
