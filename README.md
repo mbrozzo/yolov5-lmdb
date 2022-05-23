@@ -32,6 +32,7 @@ Specifically, they represent:
   - the width of the box, normalized by the width of the image,
   - the height of the box, normalized by the height of the image,
   - the class (optional, an integer).
+Shape values represents image height, width and depth, repsectively.
 
 **NOTE: image segmentation is not supported.**
 
