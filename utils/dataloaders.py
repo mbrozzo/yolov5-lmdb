@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
 Dataloaders and dataset utils
@@ -1003,8 +1004,9 @@ class LmdbLoader(LoadImagesAndLabels):
                     w,
                     h
                 ], dtype='float32'))
+            lb = np.array(lb, dtype='float32') if lb else np.zeros((0, 5), dtype=np.float32)
             segments = []
-            x['labels'][im_file] = [np.array(lb, dtype='float32'), shape, segments]
+            x['labels'][im_file] = [lb, shape, segments]
         x['hash'] = get_hash([f'{tup[0]}{tup[1]}' for tup in self.im_files])
         x['results'] = len(self.im_files), 0, 0, 0, len(self.im_files)
         x['msgs'] = []  # warnings
