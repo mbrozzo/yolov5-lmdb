@@ -967,7 +967,7 @@ class LmdbLoader(LoadImagesAndLabels):
         self.npy_files = [cache_dir.joinpath(f'{key}.npy') for key in self.im_files]
         if cache_images == 'disk':
             cache_dir.mkdir(parents=True, exist_ok=True)
-        if cache_images != 'no':
+        if cache_images != 'no' and cache_images:
             gb = 0  # Gigabytes of cached images
             self.im_hw0, self.im_hw = [None] * n, [None] * n
             fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
