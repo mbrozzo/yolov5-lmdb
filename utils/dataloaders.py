@@ -889,6 +889,8 @@ class LmdbLoader(LoadImagesAndLabels):
                 raise ValueError('Argument paths must be a directory or a list of directories when using an LMDB dataset')
 
         self.im_files = list(self.lmdb.keys())
+        # self.keys = list(self.lmdb.keys()) # Keys as (db_index, key) tuples
+        # self.im_files = [k[1] for k in self.keys] # sets im_files to the key strings, just to make the training not crash at the end
         
         cache_path = path_obj[0].joinpath('labels.cache')
         try:
@@ -965,7 +967,7 @@ class LmdbLoader(LoadImagesAndLabels):
         self.npy_files = [cache_dir.joinpath(f'{key}.npy') for key in self.im_files]
         if cache_images == 'disk':
             cache_dir.mkdir(parents=True, exist_ok=True)
-        if cache_images:
+        if cache_images != 'no':
             gb = 0  # Gigabytes of cached images
             self.im_hw0, self.im_hw = [None] * n, [None] * n
             fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
