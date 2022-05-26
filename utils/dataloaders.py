@@ -878,7 +878,9 @@ class LmdbLoader(LoadImagesAndLabels):
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.albumentations = Albumentations() if augment else None
-        self.path = path if type(path) == list else [path]
+        if type(path) != list:
+            path = [path]
+        self.path = path
         self.lmdb = LmdbMultipleDatasetsReadonly(path)
 
         path_obj = [Path(p) for p in path]
