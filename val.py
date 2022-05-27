@@ -177,6 +177,7 @@ def run(
                                        pad=pad,
                                        rect=rect,
                                        workers=workers,
+                                       lmdb=data[lmdb],
                                        prefix=colorstr(f'{task}: '))[0]
 
     seen = 0
