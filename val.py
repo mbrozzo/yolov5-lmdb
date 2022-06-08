@@ -121,6 +121,7 @@ def run(
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
+        disable_letterbox=False,
 ):
     # Initialize/load model and set device
     training = model is not None
@@ -178,6 +179,7 @@ def run(
                                        rect=rect,
                                        workers=workers,
                                        lmdb=data['lmdb'],
+                                       disable_lettebox=disable_letterbox,
                                        prefix=colorstr(f'{task}: '))[0]
 
     seen = 0
@@ -350,6 +352,10 @@ def parse_opt():
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
+
+    # Added arguments
+    parser.add_argument('--disable_letterbox', action='store_true', help='disable letterboxing and rescale images instead')
+
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
     opt.save_json |= opt.data.endswith('coco.yaml')
@@ -359,6 +365,7 @@ def parse_opt():
 
 
 def main(opt):
+
     check_requirements(requirements=ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
 
     if opt.task in ('train', 'val', 'test'):  # run normally

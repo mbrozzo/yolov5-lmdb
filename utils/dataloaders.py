@@ -111,7 +111,8 @@ def create_dataloader(path,
                       quad=False,
                       prefix='',
                       shuffle=False,
-                      lmdb=False):
+                      lmdb=False,
+                      ):
     if rect and shuffle:
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
@@ -188,7 +189,10 @@ class _RepeatSampler:
 
 class LoadImages:
     # YOLOv5 image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
-    def __init__(self, path, img_size=640, stride=32, auto=True):
+    def __init__(self, path, img_size=640, stride=32, auto=True, disable_letterbox=False):
+
+        self.disable_letterbox = disable_letterbox
+
         p = str(Path(path).resolve())  # os-agnostic absolute path
         if '*' in p:
             files = sorted(glob.glob(p, recursive=True))  # glob
@@ -250,7 +254,7 @@ class LoadImages:
             s = f'image {self.count}/{self.nf} {path}: '
 
         # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
+        img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto, scaleFill=self.disable_letterbox)[0]
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -269,12 +273,14 @@ class LoadImages:
 
 class LoadWebcam:  # for inference
     # YOLOv5 local webcam dataloader, i.e. `python detect.py --source 0`
-    def __init__(self, pipe='0', img_size=640, stride=32):
+    def __init__(self, pipe='0', img_size=640, stride=32, disable_letterbox=False):
         self.img_size = img_size
         self.stride = stride
         self.pipe = eval(pipe) if pipe.isnumeric() else pipe
         self.cap = cv2.VideoCapture(self.pipe)  # video capture object
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)  # set buffer size
+
+        self.disable_letterbox = disable_letterbox
 
     def __iter__(self):
         self.count = -1
@@ -297,7 +303,7 @@ class LoadWebcam:  # for inference
         s = f'webcam {self.count}: '
 
         # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride)[0]
+        img = letterbox(img0, self.img_size, stride=self.stride, scaleFill=self.disable_letterbox)[0]
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -311,10 +317,12 @@ class LoadWebcam:  # for inference
 
 class LoadStreams:
     # YOLOv5 streamloader, i.e. `python detect.py --source 'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP streams`
-    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True):
+    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True, disable_letterbox=False):
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
+        
+        self.disable_letterbox = disable_letterbox
 
         if os.path.isfile(sources):
             with open(sources) as f:
@@ -349,7 +357,7 @@ class LoadStreams:
         LOGGER.info('')  # newline
 
         # check for common shapes
-        s = np.stack([letterbox(x, self.img_size, stride=self.stride, auto=self.auto)[0].shape for x in self.imgs])
+        s = np.stack([letterbox(x, self.img_size, stride=self.stride, auto=self.auto, scaleFill=self.disable_letterbox)[0].shape for x in self.imgs])
         self.rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
         if not self.rect:
             LOGGER.warning('WARNING: Stream shapes differ. For optimal performance supply similarly-shaped streams.')
@@ -383,7 +391,7 @@ class LoadStreams:
 
         # Letterbox
         img0 = self.imgs.copy()
-        img = [letterbox(x, self.img_size, stride=self.stride, auto=self.rect and self.auto)[0] for x in img0]
+        img = [letterbox(x, self.img_size, stride=self.stride, auto=self.rect and self.auto, scaleFill=self.disable_letterbox)[0] for x in img0]
 
         # Stack
         img = np.stack(img, 0)
@@ -420,6 +428,7 @@ class LoadImagesAndLabels(Dataset):
                  single_cls=False,
                  stride=32,
                  pad=0.0,
+                 disable_letterbox=False,
                  prefix=''):
         self.img_size = img_size
         self.augment = augment
@@ -431,6 +440,8 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
+
+        self.disable_letterbox = disable_letterbox
 
         try:
             f = []  # image files
@@ -527,7 +538,7 @@ class LoadImagesAndLabels(Dataset):
         # Cache images into RAM/disk for faster training (WARNING: large datasets may exceed system resources)
         self.ims = [None] * n
         self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
-        if cache_images:
+        if cache_images != 'none' and cache_images:
             gb = 0  # Gigabytes of cached images
             self.im_hw0, self.im_hw = [None] * n, [None] * n
             fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
@@ -609,7 +620,7 @@ class LoadImagesAndLabels(Dataset):
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
-            img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
+            img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment, scaleFill=self.disable_letterbox)
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             labels = self.labels[index].copy()
@@ -868,6 +879,7 @@ class LmdbLoader(LoadImagesAndLabels):
                  single_cls=False,
                  stride=32,
                  pad=0.0,
+                 disable_letterbox=False,
                  prefix=''):
         self.img_size = img_size
         self.augment = augment
@@ -967,7 +979,7 @@ class LmdbLoader(LoadImagesAndLabels):
         self.npy_files = [cache_dir.joinpath(f'{key}.npy') for key in self.im_files]
         if cache_images == 'disk':
             cache_dir.mkdir(parents=True, exist_ok=True)
-        if cache_images != 'no' and cache_images:
+        if cache_images != 'none' and cache_images:
             gb = 0  # Gigabytes of cached images
             self.im_hw0, self.im_hw = [None] * n, [None] * n
             fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image

@@ -106,7 +106,12 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     init_seeds(1 + RANK)
     with torch_distributed_zero_first(LOCAL_RANK):
         data_dict = data_dict or check_dataset(data)  # check if None
+    
+    # Additional data to get from YAML
     is_lmdb = data_dict.get('lmdb', False)
+    train_percentage = min(max( data_dict.get('train_percentage', 100), 0), 100)
+    val_percentage = min(max(data_dict.get('val_percentage', 100), 0), 100)
+
     train_path, val_path = data_dict['train'], data_dict['val']
     nc = 1 if single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
@@ -235,7 +240,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                               quad=opt.quad,
                                               prefix=colorstr('train: '),
                                               shuffle=True,
-                                              lmdb=is_lmdb)
+                                              lmdb=is_lmdb,
+                                              disable_letterbox=disable_letterbox,
+                                              percentage=train_percentage)
     mlc = int(np.concatenate(dataset.labels, 0)[:, 0].max())  # max label class
     nb = len(train_loader)  # number of batches
     assert mlc < nc, f'Label class {mlc} exceeds nc={nc} in {data}. Possible class labels are 0-{nc - 1}'
@@ -243,18 +250,20 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # Process 0
     if RANK in {-1, 0}:
         val_loader = create_dataloader(val_path,
-                                       imgsz,
-                                       batch_size // WORLD_SIZE * 2,
-                                       gs,
-                                       single_cls,
-                                       hyp=hyp,
-                                       cache=None if noval else opt.cache,
-                                       rect=True,
-                                       rank=-1,
-                                       workers=workers * 2,
-                                       pad=0.5,
-                                       prefix=colorstr('val: '),
-                                       lmdb=is_lmdb)[0]
+                                        imgsz,
+                                        batch_size // WORLD_SIZE * 2,
+                                        gs,
+                                        single_cls,
+                                        hyp=hyp,
+                                        cache=None if noval else opt.cache,
+                                        rect=True,
+                                        rank=-1,
+                                        workers=workers * 2,
+                                        pad=0.5,
+                                        prefix=colorstr('val: '),
+                                        lmdb=is_lmdb,
+                                        disable_letterbox=disable_letterbox,
+                                        percentage=val_percentage)[0]
 
         if not resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -495,7 +504,7 @@ def parse_opt(known=False):
     parser.add_argument('--noplots', action='store_true', help='save no plot files')
     parser.add_argument('--evolve', type=int, nargs='?', const=300, help='evolve hyperparameters for x generations')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
-    parser.add_argument('--cache', type=str, nargs='?', const='ram', help='--cache images in "ram" (default) or "disk"')
+    parser.add_argument('--cache', type=str, nargs='?', const='ram', help='--cache images in "ram" (default) or "disk" or "none" (no caching)')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
@@ -514,6 +523,9 @@ def parse_opt(known=False):
     parser.add_argument('--save-period', type=int, default=-1, help='Save checkpoint every x epochs (disabled if < 1)')
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
 
+    # Added arguments
+    parser.add_argument('--disable_letterbox', action='store_true', help='disable letterboxing and rescale images instead')
+
     # Weights & Biases arguments
     parser.add_argument('--entity', default=None, help='W&B: Entity')
     parser.add_argument('--upload_dataset', nargs='?', const=True, default=False, help='W&B: Upload data, "val" option')
@@ -525,6 +537,10 @@ def parse_opt(known=False):
 
 
 def main(opt, callbacks=Callbacks()):
+
+    # Added CLI parameters
+    disable_letterbox = opt.disable_letterbox
+
     # Checks
     if RANK in {-1, 0}:
         print_args(vars(opt))
