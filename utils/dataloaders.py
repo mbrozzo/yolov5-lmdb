@@ -879,6 +879,7 @@ class LmdbLoader(LoadImagesAndLabels):
                  single_cls=False,
                  stride=32,
                  pad=0.0,
+                 percentage=100,
                  disable_letterbox=False,
                  prefix=''):
         self.img_size = img_size
@@ -893,7 +894,7 @@ class LmdbLoader(LoadImagesAndLabels):
         if type(path) != list:
             path = [path]
         self.path = path
-        self.lmdb = LmdbMultipleDatasetsReadonly(path)
+        self.lmdb = LmdbMultipleDatasetsReadonly(path, percentage)
 
         path_obj = [Path(p) for p in path]
         for p in path_obj:

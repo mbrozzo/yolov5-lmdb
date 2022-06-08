@@ -11,7 +11,8 @@ from lmdbDataset import LmdbSingleFileDataset, LmdbDataset
 
 class LmdbSingleFileDatasetReadonly:
 
-    def __init__(self, path, map_size=LmdbSingleFileDataset.DefaultMapSize, open_on_init=True):
+    def __init__(self, path, map_size=LmdbSingleFileDataset.DefaultMapSize, open_on_init=True, percentage=100):
+        self.percentage = percentage
         path_obj = Path(path)
         if not path_obj.is_dir():
             raise Exception(f'Specified path {path} is not a directory')
@@ -32,6 +33,8 @@ class LmdbSingleFileDatasetReadonly:
         self.__lmdb_env = lmdb.open(self.path, map_size=self.map_size, readonly=True, lock=False)
         with self.__lmdb_env.begin() as transaction:
             self.__keys = [ key.decode('latin1') for key, _ in transaction.cursor() ]
+            if percentage != 100:
+                self.__keys = self.__keys[:round(len(self.__keys)*percentage/100)]
     
     def close(self):
         if self.is_open():
@@ -55,6 +58,7 @@ class LmdbSingleFileDatasetReadonly:
         '''
         if not type(key) is str: raise Exception("The provided key is not a string")
         if self.__lmdb_env is None: raise Exception("The LMDB environment has not been initialized")
+        if key not in self.__keys: return None
         with self.__lmdb_env.begin() as transaction:
             return transaction.get(key.encode('latin1'))
     
@@ -199,7 +203,8 @@ class LmdbDatasetReadonly:
 
 class LmdbMultipleDatasetsReadonly:
     
-    def __init__(self, paths, map_size=LmdbDataset.DefaultMapSize, open_on_init=True):
+    def __init__(self, paths, map_size=LmdbDataset.DefaultMapSize, open_on_init=True, percentage=100):
+        self.percentage = percentage
         self.map_size = map_size
         self.path_objs = [Path(p) for p in paths]
         for p in self.path_objs:
