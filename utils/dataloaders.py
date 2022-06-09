@@ -114,6 +114,7 @@ def create_dataloader(
     shuffle=False,
     lmdb=False,
     disable_letterbox=False,
+    percentage=100,
 ):
     if rect and shuffle:
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
@@ -139,8 +140,10 @@ def create_dataloader(
             stride=int(stride),
             pad=pad,
             image_weights=image_weights,
-            disable_letterbox=False,
-            prefix=prefix)
+            disable_letterbox=disable_letterbox,
+            percentage=percentage,
+            prefix=prefix,
+        )
 
     batch_size = min(batch_size, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
