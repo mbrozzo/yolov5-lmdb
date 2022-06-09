@@ -33,7 +33,7 @@ class LmdbSingleFileDatasetReadonly:
         self.__lmdb_env = lmdb.open(self.path, map_size=self.map_size, readonly=True, lock=False)
         with self.__lmdb_env.begin() as transaction:
             self.__keys = [ key.decode('latin1') for key, _ in transaction.cursor() ]
-            if percentage != 100:
+            if self.percentage != 100:
                 self.__keys = self.__keys[:round(len(self.__keys)*percentage/100)]
     
     def close(self):
