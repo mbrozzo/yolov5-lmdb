@@ -900,7 +900,7 @@ class LmdbLoader(LoadImagesAndLabels):
         if type(path) != list:
             path = [path]
         self.path = path
-        self.lmdb = LmdbMultipleDatasetsReadonly(path, percentage)
+        self.lmdb = LmdbMultipleDatasetsReadonly(path, percentage=percentage)
 
         path_obj = [Path(p) for p in path]
         for p in path_obj:
