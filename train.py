@@ -524,7 +524,7 @@ def parse_opt(known=False):
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
 
     # Added arguments
-    parser.add_argument('--disable_letterbox', action='store_true', help='disable letterboxing and rescale images instead')
+    parser.add_argument('--disable-letterbox', action='store_true', help='disable letterboxing and rescale images instead')
 
     # Weights & Biases arguments
     parser.add_argument('--entity', default=None, help='W&B: Entity')

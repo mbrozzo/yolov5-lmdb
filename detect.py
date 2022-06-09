@@ -239,7 +239,7 @@ def parse_opt():
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
 
     # Added arguments
-    parser.add_argument('--disable_letterbox', action='store_true', help='disable letterboxing and rescale images instead')
+    parser.add_argument('--disable-letterbox', action='store_true', help='disable letterboxing and rescale images instead')
 
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
