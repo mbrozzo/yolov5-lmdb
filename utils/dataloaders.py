@@ -902,6 +902,8 @@ class LmdbLoader(LoadImagesAndLabels):
         self.path = path
         self.lmdb = LmdbMultipleDatasetsReadonly(path, percentage=percentage)
 
+        self.disable_letterbox = disable_letterbox
+
         path_obj = [Path(p) for p in path]
         for p in path_obj:
             if not p.is_dir():

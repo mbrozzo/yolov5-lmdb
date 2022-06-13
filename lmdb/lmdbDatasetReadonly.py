@@ -34,7 +34,7 @@ class LmdbSingleFileDatasetReadonly:
         with self.__lmdb_env.begin() as transaction:
             self.__keys = [ key.decode('latin1') for key, _ in transaction.cursor() ]
             if self.percentage != 100:
-                self.__keys = self.__keys[:round(len(self.__keys)*percentage/100)]
+                self.__keys = self.__keys[:round(len(self.__keys)*self.percentage/100)]
     
     def close(self):
         if self.is_open():
@@ -224,7 +224,7 @@ class LmdbMultipleDatasetsReadonly:
         paths = self.find_lmdb_datasets_paths()
         lmdb_datasets = []
         for p in paths:
-            lmdb_datasets.append(LmdbSingleFileDatasetReadonly(str(p.absolute()), map_size=self.map_size))
+            lmdb_datasets.append(LmdbSingleFileDatasetReadonly(str(p.absolute()), map_size=self.map_size, percentage=self.percentage))
         keys = []
         for i, d in enumerate(lmdb_datasets):
             for k in d.keys():
