@@ -27,13 +27,13 @@ Labels are JSON strings with the following structure:
 The ```boxes``` array contains the actual labels and is the only required field.
 Labels are slightly different from those in the YOLO format.
 Specifically, they represent:
-  - the x coordinate of the top left corner of the box, normalized by the width of the image,
-  - the y coordinate of the top left corner of the box, normalized by the height of the image,
-  - the width of the box, normalized by the width of the image,
-  - the height of the box, normalized by the height of the image,
-  - the class (optional, an integer).
+  1. the x coordinate of the top left corner of the box, normalized by the width of the image,
+  1. the y coordinate of the top left corner of the box, normalized by the height of the image,
+  1. the width of the box, normalized by the width of the image,
+  1. the height of the box, normalized by the height of the image,
+  1. the class (optional, an integer).
 
-Shape values represents image height, width and depth, repsectively.
+Shape values represents image height, width and depth, respectively.
 
 **NOTE: image segmentation is not supported.**
 
